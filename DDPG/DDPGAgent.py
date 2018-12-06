@@ -42,14 +42,15 @@ class DDPGbuilder:
         self.target_critic.load_state_dict(self.critic.state_dict())
 
     class _OUnoise:
-        def __init__(self, theta, sigma, dim):
+        def __init__(self, theta, sigma, dim, dt=0.1):
             self.theta = theta
             self.sigma = sigma
             self.dim = dim
+            self.dt = dt
             self.noise = np.zeros([dim])
 
         def get_noise(self):
-            self.noise += self.theta * -self.noise + self.sigma * np.random.randn(self.dim)
+            self.noise += self.theta * - self.noise * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal([self.dim])
             return torch.from_numpy(self.noise.astype(np.float32)).cuda()
 
     def _smooth_update(self):
@@ -60,7 +61,7 @@ class DDPGbuilder:
             target.data.copy_(self._update_tau * current.data + (1 - self._update_tau) * target.data)
 
     def get_action(self, state, add_noise=True):
-        action = self.actor(torch.from_numpy(state).cuda())
+        action = self.actor(torch.tensor(state))
         noise = self.noise.get_noise() * add_noise
         action += noise
         return action
@@ -91,7 +92,7 @@ class DDPGbuilder:
         r = torch.tensor(r)
         s_n = torch.tensor(s_n)
         done = torch.tensor(done)
-        target = r + (self._discount_factor * self.target_critic(s_n, self.target_actor(s_n))) * done
+        target = r + ((self._discount_factor * self.target_critic(s_n, self.target_actor(s_n))) * (1 - done))
 
         target = torch.tensor(target)
 
