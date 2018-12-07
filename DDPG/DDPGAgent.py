@@ -53,7 +53,7 @@ class DDPGbuilder:
             self.noise += self.theta * - self.noise * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal([self.dim])
             return torch.from_numpy(self.noise.astype(np.float32)).cuda()
 
-    def _smooth_update(self):
+    def smooth_update(self):
         # refer to udacity dqn repo;
         for target, current in zip(self.target_actor.parameters(), self.actor.parameters()):
             target.data.copy_(self._update_tau * current.data + (1 - self._update_tau) * target.data)
@@ -61,9 +61,13 @@ class DDPGbuilder:
             target.data.copy_(self._update_tau * current.data + (1 - self._update_tau) * target.data)
 
     def get_action(self, state, add_noise=True):
+        self.critic.eval()
+        self.actor.eval()
         action = self.actor(torch.tensor(state))
         noise = self.noise.get_noise() * add_noise
         action += noise
+        self.critic.train()
+        self.actor.train()
         return action
 
     def append_memory(self, s, a, r, s_next, done):
@@ -108,8 +112,6 @@ class DDPGbuilder:
         actor_loss = -torch.mean(self.critic(s, self.actor(s)))
         actor_loss.backward()
         self._actor_opt.step()
-        
-        self._smooth_update()
 
     def save_model(self, path):
         torch.save(self.critic.state_dict, path + "_critic")
